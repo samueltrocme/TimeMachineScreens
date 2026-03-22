@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Mecanisme engrenages - TimeMachine</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: serif;
+      color: #fff;
+    }
+
+    .panel {
+      position: relative;
+      max-width: 100vw;
+      max-height: 100vh;
+      height: 100vh;
+      aspect-ratio: 9 / 16;
+      background-image: url("/Engrenage/fond_sans_engrenages.jpg");
+      background-size: 100% 100%;
+      background-position: center;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+    }
+
+    .gear-img {
+      position: absolute;
+      transform-origin: center center;
+      display: block;
+      pointer-events: none;
+      z-index: 40;
+      height: auto;
+      object-fit: contain;
+    }
+
+    #gear-0 { top: 9.4%; left: 14.5%; width: 65%; aspect-ratio: 1 / 1; }
+    #gear-1 { top: 25.4%; left: 42.6%; width: 46%; aspect-ratio: 1 / 1; }
+    #gear-2 { top: 29.7%; left: 10.4%; width: 70%; aspect-ratio: 1 / 1; }
+    #gear-3 { top: 47.1%; left: 43.7%; width: 48%; aspect-ratio: 1 / 1; }
+    #gear-4 { top: 50.7%; left: 8.6%; width: 75%; aspect-ratio: 1 / 1; }
+
+    .rotating {
+      animation: spin 3s linear infinite;
+      filter: brightness(1.1);
+    }
+
+    .blocked {
+      animation: shake 0.6s ease-in-out infinite;
+      opacity: 0.75;
+    }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    #progress {
+      position: absolute;
+      top: 2%;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+      font-weight: bold;
+    }
+
+    #progressStep {
+      font-size: 1.8rem;
+      color: #ffcc00;
+    }
+
+    #connDisplay {
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
+
+    .buttons-row {
+      position: absolute;
+      bottom: 3%;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 1.5%;
+    }
+
+    .btn-indicator {
+      width: 11%;
+      aspect-ratio: 1 / 1;
+      border: 2px solid rgba(255, 255, 255, 0.8);
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 0.85rem;
+      background: rgba(0, 0, 0, 0.45);
+      color: #ddd;
+      transition: transform 220ms ease, background 220ms ease, color 220ms ease;
+    }
+
+    .btn-indicator.on {
+      background: rgba(255, 204, 0, 0.9);
+      color: #111;
+      transform: translateY(-4px);
+      box-shadow: 0 0 14px rgba(255, 204, 0, 0.55);
+    }
+
+    #victory-msg {
+      position: absolute;
+      top: 8%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      text-align: center;
+      color: #ffcc00;
+      font-weight: bold;
+      font-size: 1.5rem;
+      text-shadow: 0 0 10px #000;
+      display: none;
+      z-index: 120;
+    }
+
+    #reset-msg {
+      position: absolute;
+      top: 14%;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      font-size: 0.95rem;
+      color: #ffd67a;
+      text-shadow: 0 0 10px #000;
+      opacity: 0;
+      transition: opacity 250ms ease;
+      z-index: 120;
+    }
+
+    #reset-msg.visible {
+      opacity: 1;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(-360deg); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(4deg); }
+      75% { transform: rotate(-4deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <img src="/Engrenage/gear0.png" class="gear-img" id="gear-0" alt="Engrenage 1">
+    <img src="/Engrenage/gear1.png" class="gear-img" id="gear-1" alt="Engrenage 2">
+    <img src="/Engrenage/gear2.png" class="gear-img" id="gear-2" alt="Engrenage 3">
+    <img src="/Engrenage/gear3.png" class="gear-img" id="gear-3" alt="Engrenage 4">
+    <img src="/Engrenage/gear4.png" class="gear-img" id="gear-4" alt="Engrenage 5">
+
+    <div id="overlay">
+      <div id="progress">
+        <div id="progressStep">0/6</div>
+        <div id="connDisplay">Connexion: initialisation...</div>
+      </div>
+      <div id="victory-msg">MECANISME REPARE</div>
+      <div id="reset-msg">Reinitialisation detectee</div>
+
+      <div class="buttons-row" id="buttonsRow">
+        <div class="btn-indicator" id="btn-1">1</div>
+        <div class="btn-indicator" id="btn-2">2</div>
+        <div class="btn-indicator" id="btn-3">3</div>
+        <div class="btn-indicator" id="btn-4">4</div>
+        <div class="btn-indicator" id="btn-5">5</div>
+        <div class="btn-indicator" id="btn-6">6</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const progressStep = document.getElementById("progressStep");
+    const connDisplay = document.getElementById("connDisplay");
+    const victoryMsg = document.getElementById("victory-msg");
+    const resetMsg = document.getElementById("reset-msg");
+    const gears = [
+      document.getElementById("gear-0"),
+      document.getElementById("gear-1"),
+      document.getElementById("gear-2"),
+      document.getElementById("gear-3"),
+      document.getElementById("gear-4")
+    ];
+
+    let sequenceStep = 0;
+    let previousStep = 0;
+    let fallbackTimer = null;
+    let resetTimer = null;
+
+    function clampStep(value) {
+      return Math.max(0, Math.min(6, Number(value) || 0));
+    }
+
+    function showResetNotice() {
+      window.clearTimeout(resetTimer);
+      resetMsg.classList.add("visible");
+      resetTimer = window.setTimeout(() => {
+        resetMsg.classList.remove("visible");
+      }, 1800);
+    }
+
+    function render() {
+      progressStep.textContent = `${sequenceStep}/6`;
+      victoryMsg.style.display = sequenceStep === 6 ? "block" : "none";
+
+      for (let i = 1; i <= 6; i++) {
+        const indicator = document.getElementById(`btn-${i}`);
+        indicator.classList.toggle("on", i <= sequenceStep);
+      }
+
+      // 5 engrenages physiques, activation progressive selon les 6 etapes.
+      const rotatingCount = Math.min(5, sequenceStep);
+      gears.forEach((gear, index) => {
+        gear.classList.remove("rotating", "blocked");
+        if (index < rotatingCount || sequenceStep === 6) {
+          gear.classList.add("rotating");
+        } else {
+          gear.classList.add("blocked");
+        }
+      });
+    }
+
+    function applyState(nextStep) {
+      previousStep = sequenceStep;
+      sequenceStep = clampStep(nextStep);
+
+      if (previousStep > 0 && sequenceStep === 0) {
+        showResetNotice();
+      }
+
+      render();
+    }
+
+    async function fetchStateOnce() {
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+        const data = await response.json();
+        if (typeof data.sequenceStep === "number") {
+          applyState(data.sequenceStep);
+        }
+      } catch (_error) {
+        // Silent retry by caller.
+      }
+    }
+
+    function startFallbackPolling() {
+      if (fallbackTimer) {
+        return;
+      }
+      fallbackTimer = window.setInterval(fetchStateOnce, 2500);
+    }
+
+    function stopFallbackPolling() {
+      if (!fallbackTimer) {
+        return;
+      }
+      window.clearInterval(fallbackTimer);
+      fallbackTimer = null;
+    }
+
+    function connectSSE() {
+      if (!window.EventSource) {
+        connDisplay.textContent = "Connexion: fallback polling";
+        startFallbackPolling();
+        return;
+      }
+
+      const evt = new EventSource("/events");
+
+      evt.addEventListener("open", () => {
+        connDisplay.textContent = "Connexion: SSE active";
+        stopFallbackPolling();
+      });
+
+      evt.addEventListener("state", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (typeof data.sequenceStep === "number") {
+            applyState(data.sequenceStep);
+          }
+        } catch (_error) {
+          // Ignore malformed events.
+        }
+      });
+
+      evt.addEventListener("error", () => {
+        connDisplay.textContent = "Connexion: SSE instable, fallback actif";
+        startFallbackPolling();
+      });
+    }
+
+    render();
+    fetchStateOnce();
+    connectSSE();
+  </script>
+</body>
+</html>

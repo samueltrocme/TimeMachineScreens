@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Steampunk Mobile Panel - Carnaval</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: serif;
+        }
+        
+        .panel {
+            position: relative;
+            /* On enlève width et height fixes, et on utilise ce combo : */
+            max-width: 100vw; /* Ne dépasse jamais la largeur de l'écran */
+            max-height: 100vh; /* Ne dépasse jamais la hauteur de l'écran */
+            height: 100vh; /* Essaie de prendre toute la hauteur */
+            
+            /* LA MAGIE EST ICI : On verrouille les proportions (format portrait 9:16) */
+            aspect-ratio: 9 / 16; 
+            
+            background-image: url('fond_sans_engrenages.jpg'); 
+            background-size: 100% 100%; /* S'étire parfaitement dans le cadre verrouillé */
+            background-position: center;
+            
+            /* Un peu d'ombre pour faire ressortir le panneau sur le fond noir */
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        /* Les zones invisibles pour cliquer sur les interrupteurs */
+        .switch-zone {
+            display: none;
+            position: absolute;
+            width: 15%; 
+            height: 8%;  
+            cursor: pointer;
+            z-index: 100; /* Toujours au-dessus pour capter le clic */
+            /* background: rgba(255, 0, 0, 0.4); /* Décommente cette ligne si tu veux revoir les zones de clic */
+        }
+
+        /* Positions de tes 5 interrupteurs */
+        #sw-0 { top: 22%; right: 12%; }
+        #sw-1 { top: 35%; right: 12%; }
+        #sw-2 { top: 46%; left: 12%; }
+        #sw-3 { top: 56%; right: 12%; }
+        #sw-4 { top: 68%; left: 16%; }
+
+        /* Style générique des engrenages */
+        .gear-img {
+            position: absolute;
+            transform-origin: center center; 
+            display: block; 
+            pointer-events: none; 
+            z-index: 50;
+            
+            /* LA MAGIE EST ICI : mix-blend-mode: multiply; EST SUPPRIMÉ */
+            /* Nous utilisons des images à OPACITÉ TOTALE (100%) */
+            
+            /* LA CORRECTION ANTI-OVALE EST CONSERVÉE : */
+            height: auto; 
+            object-fit: contain;
+        }
+
+        /* Positions recalées SANS forcer l'aspect-ratio */
+        #gear-0 { top: 10%; left: 34.5%; width: 50%; } 
+        #gear-1 { top: 31%; left: 52%; width: 16%; }     
+        #gear-2 { top: 43%; left: 33%; width: 20%; }     
+        #gear-3 { top: 53.5%; left: 51%; width: 18.5%; } 
+        #gear-4 { top: 65%; left: 31%; width: 25%; }
+
+        /* Animation quand c'est le BON choix (ça tourne) */
+        .rotating {
+            animation: spin 3s linear infinite;
+        }
+
+        /* Animation quand c'est le MAUVAIS choix (ça tremble) */
+        .blocked {
+            animation: shake 0.5s ease-in-out infinite;
+        }
+
+        /* Les clés d'animation */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(-360deg); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(5deg); }
+            75% { transform: rotate(-5deg); }
+        }
+
+        /* Positions recalées des 5 engrenages */
+        #gear-0 { top: 9.4%; left: 14.5%; width: 65%; aspect-ratio: 1/1; } 
+        #gear-1 { top: 25.4%; left: 42.6%; width: 46%; aspect-ratio: 1/1; }     
+        #gear-2 { top: 29.7%; left: 10.4%; width: 70%; aspect-ratio: 1/1; }     
+        #gear-3 { top: 47.1%; left: 43.7%; width: 48%; aspect-ratio: 1/1; } 
+        #gear-4 { top: 50.7%; left: 8.6%; width: 75%; aspect-ratio: 1/1; }     
+
+        /* Message de victoire */
+        #victory-msg {
+            position: absolute;
+            top: 2%; 
+            width: 100%;
+            text-align: center;
+            color: #ffcc00;
+            font-weight: bold;
+            font-size: 1.8rem;
+            text-shadow: 0 0 10px #000;
+            display: none;
+            z-index: 200;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <div id="victory-msg">MÉCANISME DÉVERROUILLÉ</div>
+
+        <div class="switch-zone" id="sw-0" onclick="toggle(0)"></div>
+        <div class="switch-zone" id="sw-1" onclick="toggle(1)"></div>
+        <div class="switch-zone" id="sw-2" onclick="toggle(2)"></div>
+        <div class="switch-zone" id="sw-3" onclick="toggle(3)"></div>
+        <div class="switch-zone" id="sw-4" onclick="toggle(4)"></div>
+
+        <img src="gear0.png" class="gear-img" id="gear-0">
+        <img src="gear1.png" class="gear-img" id="gear-1">
+        <img src="gear2.png" class="gear-img" id="gear-2">
+        <img src="gear3.png" class="gear-img" id="gear-3">
+        <img src="gear4.png" class="gear-img" id="gear-4">
+    </div>
+
+    <script>
+        // État de départ : Tous les interrupteurs sur OFF (0)
+        let state = [0, 0, 0, 0, 0]; 
+
+        // LA MATRICE SECRÈTE (Le câblage croisé de la machine)
+        // Indique quels engrenages s'inversent quand on touche un interrupteur
+        const switchEffects = [
+            [0, 1],       // Interrupteur 0 impacte les engrenages 0 (Haut-Gauche) et 1 (Haut-Droite)
+            [0, 3],       // Interrupteur 1 impacte les engrenages 0 et 3 (Bas-Droite)
+            [1, 2, 3],    // Interrupteur 2 impacte les engrenages 1, 2 (Milieu) et 3
+            [1, 4],       // Interrupteur 3 impacte les engrenages 1 et 4 (Bas-Gauche)
+            [2, 4]        // Interrupteur 4 impacte les engrenages 2 et 4
+        ];
+
+        window.onload = () => {
+            updateMachine();
+        };
+
+        function toggle(id) {
+            // Inverse l'état physique de l'interrupteur
+            state[id] = state[id] === 0 ? 1 : 0;
+            updateMachine();
+        }
+
+        function updateMachine() {
+            // Tableau qui calcule l'énergie reçue par chaque engrenage (0 = éteint, 1 = allumé)
+            let gearPower = [0, 0, 0, 0, 0];
+
+            // On fait passer le "courant" selon les interrupteurs activés
+            for (let s = 0; s < 5; s++) {
+                if (state[s] === 1) { // Si l'interrupteur est sur ON
+                    let effects = switchEffects[s];
+                    // On inverse l'état des engrenages reliés à cet interrupteur
+                    for (let g of effects) {
+                        gearPower[g] = (gearPower[g] + 1) % 2; 
+                    }
+                }
+            }
+
+            let allSpinning = true;
+
+            // Mise à jour de l'affichage visuel
+            for (let i = 0; i < 5; i++) {
+                const gear = document.getElementById('gear-' + i);
+                gear.classList.remove('rotating', 'blocked');
+
+                if (gearPower[i] === 1) {
+                    // Si le calcul dit qu'il a du courant, il tourne !
+                    gear.classList.add('rotating');
+                } else {
+                    // Sinon, il n'a pas la bonne énergie et tremble/bloque
+                    gear.classList.add('blocked');
+                    allSpinning = false;
+                }
+            }
+
+            // Vérification de la victoire
+            if (allSpinning) {
+                document.getElementById('victory-msg').style.display = 'block';
+            } else {
+                document.getElementById('victory-msg').style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

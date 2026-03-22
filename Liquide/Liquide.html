@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Contrôle de Cuve Steampunk</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: black; overflow: hidden; display: flex; justify-content: center; align-items: center; font-family: sans-serif; }
+        video { width: 100vw; height: 100vh; object-fit: contain; }
+        .interface { position: absolute; bottom: 40px; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px); padding: 20px; border-radius: 15px; color: white; text-align: center; border: 1px solid rgba(255, 255, 255, 0.2); width: 80%; max-width: 300px; }
+        input { padding: 12px; border-radius: 8px; border: none; width: 80px; text-align: center; font-size: 1.5em; background: #222; color: #00dbde; }
+        button { padding: 12px 25px; border-radius: 8px; background: #00dbde; color: #000; border: none; font-weight: bold; cursor: pointer; margin-top: 15px; width: 100%; font-size: 1.1em; }
+        .status { margin-top: 10px; font-size: 0.8em; opacity: 0.8; }
+    </style>
+</head>
+<body>
+
+    <video id="tankVideo" playsinline muted>
+        <source src="final.mp4" type="video/mp4">
+    </video>
+
+    <div class="interface">
+        <input type="number" id="percentInput" placeholder="0" min="0" max="100">
+        <button onclick="checkLevel()">VALIDER LE NIVEAU</button>
+        <div class="status">Cible : <span id="targetDisplay">0</span>%</div>
+    </div>
+
+    <script>
+        const video = document.getElementById('tankVideo');
+        const input = document.getElementById('percentInput');
+        const targetDisplay = document.getElementById('targetDisplay');
+
+        // Timecodes réels basés sur final.mp4 (~12s, 24fps)
+const timecodes = {
+    0: 0.000,
+    10: 0.873,
+    20: 3.850,
+    30: 5.018,
+    40: 5.881,
+    50: 6.566,
+    60: 7.317,
+    70: 7.852,
+    80: 8.502,
+    90: 9.480,
+    100: 10.583
+};
+
+        let targetTime = 0;
+
+        function checkLevel() {
+            let val = parseInt(input.value);
+            if (isNaN(val)) return;
+
+            // On arrondit au palier de 10% le plus proche (inférieur)
+            let level = Math.floor(val / 10) * 10;
+            if (level > 100) level = 100;
+            if (level < 0) level = 0;
+
+            targetTime = timecodes[level];
+            targetDisplay.innerText = level;
+
+            // Si le niveau demandé est plus haut que l'actuel, on lance la lecture
+            if (video.currentTime < targetTime) {
+                video.play();
+            } else {
+                // Si on demande un niveau plus bas, on "saute" directement au temps
+                video.currentTime = targetTime;
+                video.pause();
+            }
+        }
+
+        // Surveillance constante du temps de lecture
+        video.addEventListener('timeupdate', () => {
+            if (video.currentTime >= targetTime) {
+                video.pause();
+                // On cale précisément sur le timecode pour éviter les décalages
+                video.currentTime = targetTime;
+            }
+        });
+
+        // Initialisation : on se met à 0
+        video.onloadedmetadata = () => {
+            video.currentTime = 0;
+        };
+    </script>
+</body>
+</html>

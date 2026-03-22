@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo / Backup Arduino - TimeMachine</title>
+  <style>
+    :root {
+      --bg: #111;
+      --card: #1b1b1b;
+      --line: #313131;
+      --text: #efefef;
+      --accent: #5dd8ff;
+      --warn: #ffd166;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top, #1a1a1a, #0c0c0c 70%);
+      padding: 16px;
+    }
+    .wrap {
+      max-width: 780px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    h1, h2 { margin: 0 0 10px; }
+    h1 { font-size: 1.4rem; }
+    h2 { font-size: 1.05rem; color: var(--accent); }
+    .row {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .row input[type="range"] { width: 100%; }
+    .row input[type="number"] {
+      width: 96px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #0f0f0f;
+      color: var(--text);
+      font-size: 1rem;
+    }
+    .btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    button {
+      padding: 10px 14px;
+      border: 1px solid #3f3f3f;
+      border-radius: 8px;
+      color: #fff;
+      background: #202020;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.primary { background: #12607a; border-color: #2b95ba; }
+    button.warn { background: #5f4a13; border-color: #8a6a19; color: #ffe8a3; }
+    .status-line { font-size: 0.95rem; opacity: 0.9; }
+    code {
+      display: block;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #0e0e0e;
+      color: #d8f9ff;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.9rem;
+    }
+    .nav a { color: var(--accent); margin-right: 14px; }
+    .warning {
+      color: var(--warn);
+      margin-top: 8px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Demo / Backup Arduino</h1>
+      <div class="nav">
+        <a href="/liquide">Voir ecran Liquide</a>
+        <a href="/engrenage">Voir ecran Engrenage</a>
+      </div>
+      <p class="warning">Cette page permet d'emuler les updates Arduino si necessaire.</p>
+    </div>
+
+    <div class="card">
+      <h2>Emission API</h2>
+      <div class="row">
+        <label for="energyRange">Energy percent (0-100)</label>
+        <input type="number" id="energyInput" min="0" max="100" value="0">
+      </div>
+      <div class="row">
+        <input type="range" id="energyRange" min="0" max="100" value="0">
+        <span id="energyLabel">0%</span>
+      </div>
+
+      <div class="row">
+        <label for="stepRange">Sequence step (0-6)</label>
+        <input type="number" id="stepInput" min="0" max="6" value="0">
+      </div>
+      <div class="row">
+        <input type="range" id="stepRange" min="0" max="6" value="0">
+        <span id="stepLabel">0/6</span>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="sendBtn">Envoyer update</button>
+        <button id="stepPlusBtn">+1 etape</button>
+        <button class="warn" id="resetBtn">Reset machine</button>
+      </div>
+      <p class="status-line" id="requestStatus">Etat requete: en attente</p>
+    </div>
+
+    <div class="card">
+      <h2>Etat serveur en direct</h2>
+      <p class="status-line" id="connStatus">Connexion: initialisation...</p>
+      <code id="stateDump">{}</code>
+    </div>
+  </div>
+
+  <script>
+    const energyRange = document.getElementById("energyRange");
+    const energyInput = document.getElementById("energyInput");
+    const energyLabel = document.getElementById("energyLabel");
+    const stepRange = document.getElementById("stepRange");
+    const stepInput = document.getElementById("stepInput");
+    const stepLabel = document.getElementById("stepLabel");
+    const sendBtn = document.getElementById("sendBtn");
+    const stepPlusBtn = document.getElementById("stepPlusBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const requestStatus = document.getElementById("requestStatus");
+    const connStatus = document.getElementById("connStatus");
+    const stateDump = document.getElementById("stateDump");
+
+    let fallbackTimer = null;
+
+    function clampInt(value, min, max) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return min;
+      return Math.max(min, Math.min(max, Math.round(n)));
+    }
+
+    function syncEnergy(value) {
+      const clean = clampInt(value, 0, 100);
+      energyRange.value = clean;
+      energyInput.value = clean;
+      energyLabel.textContent = `${clean}%`;
+    }
+
+    function syncStep(value) {
+      const clean = clampInt(value, 0, 6);
+      stepRange.value = clean;
+      stepInput.value = clean;
+      stepLabel.textContent = `${clean}/6`;
+    }
+
+    function renderState(state) {
+      stateDump.textContent = JSON.stringify(state, null, 2);
+      if (typeof state.energyPercent === "number") {
+        syncEnergy(state.energyPercent);
+      }
+      if (typeof state.sequenceStep === "number") {
+        syncStep(state.sequenceStep);
+      }
+    }
+
+    async function sendUpdate() {
+      const payload = {
+        energyPercent: clampInt(energyInput.value, 0, 100),
+        sequenceStep: clampInt(stepInput.value, 0, 6),
+        source: "demo-page"
+      };
+      requestStatus.textContent = "Etat requete: envoi en cours...";
+
+      try {
+        const response = await fetch("/api/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Erreur update");
+        }
+        requestStatus.textContent = "Etat requete: update envoye";
+        renderState(data.state);
+      } catch (error) {
+        requestStatus.textContent = `Etat requete: erreur (${error.message})`;
+      }
+    }
+
+    async function sendReset() {
+      requestStatus.textContent = "Etat requete: reset en cours...";
+      try {
+        const response = await fetch("/api/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: "demo-page" })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Erreur reset");
+        }
+        requestStatus.textContent = "Etat requete: reset envoye";
+        renderState(data.state);
+      } catch (error) {
+        requestStatus.textContent = `Etat requete: erreur (${error.message})`;
+      }
+    }
+
+    async function fetchStateOnce() {
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+        const data = await response.json();
+        renderState(data);
+      } catch (_error) {
+        // Ignore, next cycle will retry.
+      }
+    }
+
+    function startFallbackPolling() {
+      if (fallbackTimer) return;
+      fallbackTimer = window.setInterval(fetchStateOnce, 2500);
+    }
+
+    function stopFallbackPolling() {
+      if (!fallbackTimer) return;
+      window.clearInterval(fallbackTimer);
+      fallbackTimer = null;
+    }
+
+    function connectSSE() {
+      if (!window.EventSource) {
+        connStatus.textContent = "Connexion: fallback polling";
+        startFallbackPolling();
+        return;
+      }
+
+      const evt = new EventSource("/events");
+      evt.addEventListener("open", () => {
+        connStatus.textContent = "Connexion: SSE active";
+        stopFallbackPolling();
+      });
+      evt.addEventListener("state", (event) => {
+        try {
+          renderState(JSON.parse(event.data));
+        } catch (_error) {
+          // Ignore malformed event.
+        }
+      });
+      evt.addEventListener("error", () => {
+        connStatus.textContent = "Connexion: SSE instable, fallback actif";
+        startFallbackPolling();
+      });
+    }
+
+    energyRange.addEventListener("input", () => syncEnergy(energyRange.value));
+    energyInput.addEventListener("input", () => syncEnergy(energyInput.value));
+    stepRange.addEventListener("input", () => syncStep(stepRange.value));
+    stepInput.addEventListener("input", () => syncStep(stepInput.value));
+    sendBtn.addEventListener("click", sendUpdate);
+    stepPlusBtn.addEventListener("click", () => {
+      syncStep(clampInt(stepInput.value, 0, 6) + 1);
+      sendUpdate();
+    });
+    resetBtn.addEventListener("click", sendReset);
+
+    fetchStateOnce();
+    connectSSE();
+  </script>
+</body>
+</html>
