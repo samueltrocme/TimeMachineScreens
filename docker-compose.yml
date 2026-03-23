@@ -1,0 +1,22 @@
+services:
+  timemachine-screens:
+    container_name: timemachine-screens
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: timemachine-screens:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      NODE_ENV: production
+      PORT: "80"
+      SERIAL_ENABLED: "${SERIAL_ENABLED:-true}"
+      SERIAL_PORT_PATH: "${SERIAL_PORT_PATH:-/dev/ttyACM0}"
+      SERIAL_BAUD_RATE: "${SERIAL_BAUD_RATE:-115200}"
+      SERIAL_RECONNECT_MS: "${SERIAL_RECONNECT_MS:-3000}"
+      SERIAL_HISTORY_LIMIT: "${SERIAL_HISTORY_LIMIT:-100}"
+    volumes:
+      - "/dev:/dev"
+    device_cgroup_rules:
+      - "c 166:* rmw"
+      - "c 188:* rmw"
